@@ -1,0 +1,774 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Cerchio rapido</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: app a schermo singolo. Guida e registro in alto, cerchio ancorato al bordo basso come nel mockup. */
+  :root {
+    --bg: #23262b;
+    --surface: #2b2f35;
+    --dock: #1a1c20;
+    --line: #3a4048;
+    --orb: #003560;
+    --orb-hi: #0b4c82;
+    --orb-sub: #0d3f69;
+    --fg: #e8edf2;
+    --muted: #8f99a5;
+    --dot: #e2e8ee;
+    --out: #f0937e;
+    --in: #7fd2a9;
+    --font-ui: "Quicksand", ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+    --r: 96px;
+    --scale: 1.22;
+    --spring: cubic-bezier(.34, 1.56, .64, 1);
+    color-scheme: dark;
+  }
+
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* ---------- contenuto in alto ---------- */
+  .app {
+    height: 100%;
+    overflow-y: auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 22px calc(var(--r) + 64px);
+  }
+  .inner {
+    max-width: 520px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+  .eyebrow {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  h1 {
+    margin: 6px 0 0;
+    font-size: 27px;
+    line-height: 1.15;
+    font-weight: 700;
+    text-wrap: balance;
+  }
+  .how {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    counter-reset: step;
+  }
+  .how li {
+    display: grid;
+    grid-template-columns: 26px 1fr;
+    gap: 10px;
+    align-items: start;
+    line-height: 1.45;
+    color: var(--muted);
+    counter-increment: step;
+  }
+  .how li::before {
+    content: counter(step);
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--orb);
+    color: var(--dot);
+    font: 500 12px/24px var(--font-mono);
+    text-align: center;
+    margin-top: 1px;
+  }
+  .how b { color: var(--fg); font-weight: 700; }
+  .hint { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+  .hint kbd {
+    font: 500 11px var(--font-mono);
+    padding: 1px 5px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    color: var(--fg);
+  }
+
+  .log {
+    background: var(--surface);
+    border-radius: 18px;
+    padding: 14px 16px 6px;
+  }
+  .log-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .log-head h2 {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .ghost {
+    font: 600 13px var(--font-ui);
+    color: var(--muted);
+    background: none;
+    border: 0;
+    padding: 6px 4px;
+    cursor: pointer;
+  }
+  .ghost:hover { color: var(--fg); }
+  .ghost:focus-visible, .switch input:focus-visible, .range input:focus-visible { outline: 2px solid var(--dot); outline-offset: 2px; border-radius: 6px; }
+  #log { list-style: none; margin: 6px 0 0; padding: 0; }
+  .entry {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    align-items: center;
+    padding: 10px 0;
+    border-top: 1px solid var(--line);
+    animation: drop .26s ease both;
+  }
+  .entry:first-child { border-top: 0; }
+  .chip {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 999px;
+    color: var(--muted);
+    background: color-mix(in srgb, var(--muted) 14%, transparent);
+  }
+  .entry.out .chip { color: var(--out); background: color-mix(in srgb, var(--out) 15%, transparent); }
+  .entry.in .chip { color: var(--in); background: color-mix(in srgb, var(--in) 15%, transparent); }
+  .what { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .entry.cancel .what { color: var(--muted); }
+  .meta { font: 400 12px var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .empty { margin: 8px 0 10px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+  @keyframes drop { from { opacity: 0; transform: translateY(-6px); } }
+
+  .tune { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; font-size: 14px; }
+  .switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; }
+  .switch input { width: 18px; height: 18px; accent-color: var(--dot); margin: 0; }
+  .range { display: flex; flex-direction: column; gap: 6px; font-weight: 600; flex: 1 1 200px; min-width: 0; }
+  .range .row { display: flex; justify-content: space-between; gap: 8px; }
+  .range output { font: 500 13px var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .range input { width: 100%; accent-color: var(--dot); margin: 0; }
+
+  /* ---------- dock e cerchio ---------- */
+  .dock {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    height: calc(58px + env(safe-area-inset-bottom, 0px));
+    background: var(--dock);
+    z-index: 4;
+  }
+  .stage { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
+  .stage.tap { pointer-events: auto; touch-action: none; }
+  .scrim {
+    position: absolute; inset: 0;
+    background: rgba(12, 14, 17, .64);
+    opacity: 0;
+    transition: opacity .25s ease;
+  }
+  .stage.open .scrim { opacity: 1; }
+  .viz { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .trail { opacity: 0; transition: opacity .15s ease; }
+  .stage.drag .trail { opacity: 1; }
+  .trail line { stroke: var(--dot); stroke-opacity: .28; stroke-width: 2; stroke-linecap: round; }
+  .trail circle { fill: var(--dot); fill-opacity: .9; }
+  #guides { display: none; fill: none; stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 5; opacity: .7; }
+  body.guides #guides { display: inline; }
+  #guides .g1 { stroke-dasharray: none; opacity: .5; }
+
+  .anchor { position: fixed; left: 50%; bottom: env(safe-area-inset-bottom, 0px); width: 0; height: 0; }
+  .orb {
+    position: fixed;
+    left: calc(50% - var(--r));
+    bottom: calc(env(safe-area-inset-bottom, 0px) - var(--r));
+    width: calc(var(--r) * 2);
+    height: calc(var(--r) * 2);
+    border-radius: 50%;
+    background: var(--orb);
+    overflow: hidden;
+    clip-path: inset(0 0 50% 0);
+    pointer-events: auto;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    cursor: grab;
+    outline: none;
+    transition: transform .32s ease;
+  }
+  .orb:focus-visible { box-shadow: inset 0 0 0 3px var(--dot); }
+  .stage.open .orb { transform: scale(var(--scale)); transition: transform .5s var(--spring); }
+  .stage.drag .orb { cursor: grabbing; }
+  .half {
+    position: absolute; top: 0; bottom: 0; width: 50%;
+    background: var(--orb-hi);
+    opacity: 0;
+    transition: opacity .18s ease;
+  }
+  .half.l { left: 0; }
+  .half.r { right: 0; }
+  .half.on { opacity: 1; }
+  .orbplus {
+    position: absolute; left: 50%; top: 22%;
+    width: 26px; height: 26px;
+    transform: translate(-50%, -50%);
+    color: var(--dot);
+    opacity: .85;
+    transition: opacity .2s ease;
+  }
+  .stage.open .orbplus { opacity: 0; }
+  .lbl {
+    position: absolute; top: 29%;
+    font-size: 21px; font-weight: 600;
+    color: var(--fg);
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(.8);
+    transition: opacity .2s ease, transform .3s var(--spring);
+  }
+  .lbl.o { left: 23.2%; }
+  .lbl.i { left: 76.8%; }
+  .stage.open .lbl { opacity: .7; transform: translate(-50%, -50%) scale(1); }
+  .stage.open .lbl.on { opacity: 1; transform: translate(-50%, -50%) scale(1.25); }
+
+  .sub {
+    position: fixed;
+    width: 60px; height: 60px;
+    padding: 0; border: 0;
+    border-radius: 50%;
+    background: var(--orb-sub);
+    color: var(--dot);
+    display: grid; place-items: center;
+    font: inherit;
+    opacity: 0;
+    pointer-events: none;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+    transition: transform .34s var(--spring), opacity .18s ease, background .15s ease, color .15s ease;
+  }
+  .stage.tap .sub { pointer-events: auto; cursor: pointer; }
+  .sub svg { width: 22px; height: 22px; }
+  .sub span {
+    position: absolute; top: calc(100% + 6px); left: 50%;
+    transform: translateX(-50%);
+    font-size: 12px; font-weight: 700;
+    white-space: nowrap;
+    color: var(--muted);
+    transition: color .15s ease;
+  }
+  .sub.hot { background: var(--dot); color: var(--orb); }
+  .sub.hot span { color: var(--fg); }
+  .sub:focus-visible { outline: 2px solid var(--dot); outline-offset: 3px; }
+
+  .pill {
+    position: fixed; left: 50%;
+    transform: translate(-50%, -100%) translateY(6px);
+    padding: 9px 15px;
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--fg);
+    font-size: 14px; font-weight: 700;
+    white-space: nowrap;
+    opacity: 0;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .3);
+    transition: opacity .18s ease, transform .25s var(--spring), background .15s ease, color .15s ease;
+  }
+  .pill.show { opacity: 1; transform: translate(-50%, -100%); }
+  .pill.ok { background: var(--dot); color: var(--orb); }
+  .pill.muted { color: var(--muted); }
+  .readout {
+    position: fixed; left: 50%;
+    transform: translate(-50%, -100%);
+    font: 400 12px var(--font-mono);
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    display: none;
+  }
+  body.guides .stage.open .readout { display: block; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+  }
+</style>
+
+<div class="app">
+  <div class="inner">
+    <header>
+      <p class="eyebrow">Money tracker &middot; prototipo del gesto</p>
+      <h1>Tieni premuto, trascina, rilascia.</h1>
+    </header>
+
+    <ol class="how">
+      <li><span><b>Premi</b> il cerchio in basso: si ingrandisce e mostra le due zone.</span></li>
+      <li><span><b>Trascina</b> a sinistra per un'uscita, a destra per un'entrata. Fermati un attimo o esci dal cerchio e si apre il sottomenu.</span></li>
+      <li><span><b>Rilascia</b> su una voce per confermare. Se torni al centro e rilasci, annulli.</span></li>
+    </ol>
+
+    <p class="hint">Un tocco veloce apre il menu in modalit&agrave; a tocchi. Da tastiera: <kbd>Invio</kbd> sul cerchio, poi <kbd>&larr;</kbd> o <kbd>&rarr;</kbd>, <kbd>Esc</kbd> per chiudere.</p>
+
+    <section class="log" aria-labelledby="logTitle">
+      <div class="log-head">
+        <h2 id="logTitle">Ultimi gesti</h2>
+        <button class="ghost" id="clear" type="button">Svuota</button>
+      </div>
+      <ul id="log" aria-live="polite"></ul>
+      <p class="empty" id="empty">I gesti che fai compaiono qui, con la durata in millisecondi.</p>
+    </section>
+
+    <section class="tune" aria-label="Regolazioni">
+      <label class="switch"><input type="checkbox" id="guides"> Mostra guide e misure</label>
+      <label class="range">
+        <span class="row">Ritardo sottomenu <output id="delayOut" for="delay">220 ms</output></span>
+        <input type="range" id="delay" min="0" max="600" step="20" value="220">
+      </label>
+    </section>
+  </div>
+</div>
+
+<div class="dock"></div>
+
+<div class="stage" id="stage">
+  <div class="scrim"></div>
+  <svg class="viz" id="viz" aria-hidden="true">
+    <g id="guides"></g>
+    <g class="trail"><line id="tLine" x1="0" y1="0" x2="0" y2="0"/><circle id="tDot" r="7" cx="-20" cy="-20"/></g>
+  </svg>
+  <div class="orb" id="orb" role="button" tabindex="0" aria-label="Inserimento rapido. Tieni premuto e trascina, oppure premi Invio.">
+    <div class="half l" id="halfL"></div>
+    <div class="half r" id="halfR"></div>
+    <svg class="orbplus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    <span class="lbl o" id="lblO">&minus;$</span>
+    <span class="lbl i" id="lblI">+$</span>
+  </div>
+  <div id="subs"></div>
+  <div class="readout" id="readout"></div>
+  <div class="pill" id="pill" role="status"></div>
+  <div class="anchor" id="anchor"></div>
+</div>
+
+<script>
+(() => {
+  /* ---------- configurazione: cambia qui voci e angoli ---------- */
+  const R = 96;          // raggio del cerchio a riposo (come --r)
+  const SCALE = 1.22;    // ingrandimento quando premi (come --scale)
+  const DEAD = 34;       // zona morta al centro, in px: rilasciare qui annulla
+  const TOL = 20;        // tolleranza angolare per agganciare una voce, in gradi
+  const BUB = 30;        // raggio delle bolle del sottomenu
+  const MOVE_MIN = 10;   // px prima di considerarlo un trascinamento
+  const TAP_MAX = 300;   // ms: sotto questa durata, senza movimento, è un tocco
+
+  const ICON = {
+    bolt: '<path d="M13 3 5 13.5h6L10 21l8-10.5h-6L13 3Z"/>',
+    repeat: '<path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12"/><path d="M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/>',
+    cal: '<rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/>'
+  };
+  const ITEMS = [
+    { label: 'Immediata', icon: 'bolt' },
+    { label: 'Ricorrente', icon: 'repeat' },
+    { label: 'Programmata', icon: 'cal' }
+  ];
+  const MENU = {
+    out: { name: 'Uscita', items: ITEMS, angles: [154, 128, 102] },
+    in:  { name: 'Entrata', items: ITEMS, angles: [26, 52, 78] }
+  };
+
+  /* ---------- riferimenti ---------- */
+  const $ = (id) => document.getElementById(id);
+  const stage = $('stage'), orb = $('orb'), anchor = $('anchor'), subsLayer = $('subs');
+  const halfL = $('halfL'), halfR = $('halfR'), lblO = $('lblO'), lblI = $('lblI');
+  const tLine = $('tLine'), tDot = $('tDot'), viz = $('viz'), guidesG = $('guides');
+  const pill = $('pill'), readout = $('readout');
+  const logEl = $('log'), emptyEl = $('empty');
+  const delayIn = $('delay'), delayOut = $('delayOut'), guidesIn = $('guides');
+
+  const G = { cx: 0, cy: 0, Rv: R * SCALE, Rsub: 0, ring: 0 };
+  const S = {
+    mode: 'idle',  // idle | drag | tap
+    zone: null,    // null | 'out' | 'in'
+    sub: false,
+    item: null,
+    subEls: [],
+    pid: null, t0: 0, downX: 0, downY: 0,
+    moved: false, everZone: false,
+    dwell: 0, last: null
+  };
+  let toastTimer = 0;
+
+  /* ---------- geometria ---------- */
+  const rad = (d) => d * Math.PI / 180;
+  const angleDeg = (dx, dy) => Math.atan2(dy, dx) * 180 / Math.PI;
+  const polar = (a, d) => ({ x: G.cx + d * Math.cos(rad(a)), y: G.cy - d * Math.sin(rad(a)) });
+
+  function measure() {
+    const a = anchor.getBoundingClientRect();
+    G.cx = a.left;
+    G.cy = a.top;
+    G.Rv = R * SCALE;
+    const maxByWidth = (G.cx - BUB - 14) / Math.cos(rad(26));
+    G.Rsub = Math.max(G.Rv + 50, Math.min(G.Rv + 88, maxByWidth));
+    G.ring = G.Rv + 6;
+    viz.setAttribute('viewBox', `0 0 ${innerWidth} ${innerHeight}`);
+    const pillY = G.cy - G.Rsub - BUB - 26;
+    pill.style.top = pillY + 'px';
+    readout.style.top = (pillY - 46) + 'px';
+    drawGuides();
+  }
+
+  function drawGuides() {
+    const { cx, cy, Rv, Rsub, ring } = G;
+    let s = `<line x1="${cx}" y1="${cy}" x2="${cx}" y2="${cy - Rsub - BUB - 20}"/>`;
+    [DEAD, Rv, ring, Rsub].forEach((r, i) => { s += `<circle class="g${i}" cx="${cx}" cy="${cy}" r="${r}"/>`; });
+    for (const z of ['out', 'in']) {
+      MENU[z].angles.forEach((a) => {
+        const p1 = polar(a, ring), p2 = polar(a, Rsub + BUB + 8);
+        s += `<line x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}"/>`;
+      });
+    }
+    guidesG.innerHTML = s;
+  }
+
+  function nearestItem(zone, ang) {
+    let best = null, bd = TOL;
+    MENU[zone].angles.forEach((a, i) => {
+      const d = Math.abs(a - ang);
+      if (d <= bd) { bd = d; best = i; }
+    });
+    return best;
+  }
+
+  /* ---------- feedback ---------- */
+  function buzz(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (_) {} }
+
+  function updatePill() {
+    if (S.mode === 'idle') return;
+    const m = S.zone && MENU[S.zone];
+    let t;
+    if (S.mode === 'drag') {
+      if (!S.zone) t = S.everZone ? 'Rilascia qui per annullare' : 'Trascina a sinistra o a destra';
+      else t = `Rilascia: ${m.name.toLowerCase()} ${m.items[S.item ?? 0].label.toLowerCase()}`;
+    } else {
+      t = S.zone ? `Scegli il tipo di ${m.name.toLowerCase()}` : 'Tocca −$ o +$';
+    }
+    clearTimeout(toastTimer);
+    pill.textContent = t;
+    pill.className = 'pill show' + (S.mode === 'drag' && S.everZone && !S.zone ? ' muted' : '');
+  }
+
+  function toast(text, kind) {
+    clearTimeout(toastTimer);
+    pill.textContent = text;
+    pill.className = 'pill show ' + kind;
+    toastTimer = setTimeout(() => { pill.className = 'pill'; }, 1100);
+  }
+
+  function updateReadout() {
+    if (!document.body.classList.contains('guides') || !S.last) return;
+    const L = S.last;
+    let t = `${Math.round(angleDeg(L.dx, L.dy))}° · ${Math.round(L.dist)} px · ${S.zone ? MENU[S.zone].name.toLowerCase() : 'centro'}`;
+    if (S.item != null) t += ' · ' + MENU[S.zone].items[S.item].label.toLowerCase();
+    readout.textContent = t;
+  }
+
+  function drawTrail(x, y) {
+    tLine.setAttribute('x1', G.cx); tLine.setAttribute('y1', G.cy);
+    tLine.setAttribute('x2', x); tLine.setAttribute('y2', y);
+    tDot.setAttribute('cx', x); tDot.setAttribute('cy', y);
+  }
+
+  /* ---------- zone e sottomenu ---------- */
+  function paintZone() {
+    halfL.classList.toggle('on', S.zone === 'out');
+    halfR.classList.toggle('on', S.zone === 'in');
+    lblO.classList.toggle('on', S.zone === 'out');
+    lblI.classList.toggle('on', S.zone === 'in');
+  }
+
+  function setZone(z) {
+    clearTimeout(S.dwell);
+    if (S.sub) closeSub();
+    S.zone = z;
+    paintZone();
+    if (!z) return;
+    S.everZone = true;
+    buzz(8);
+    if (S.mode === 'drag') {
+      const d = +delayIn.value;
+      if (d === 0) openSub(z);
+      else S.dwell = setTimeout(() => {
+        if (S.mode === 'drag' && S.zone === z && !S.sub) { openSub(z); updatePill(); }
+      }, d);
+    } else {
+      openSub(z);
+    }
+  }
+
+  function place(rec, k, s) {
+    rec.el.style.transform = `translate(${rec.dx * k}px, ${rec.dy * k}px) scale(${s})`;
+  }
+
+  function openSub(zone) {
+    S.sub = true;
+    S.item = null;
+    const m = MENU[zone];
+    S.subEls = m.items.map((it, i) => {
+      const a = m.angles[i];
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'sub';
+      el.setAttribute('aria-label', `${m.name} ${it.label}`);
+      el.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICON[it.icon]}</svg><span>${it.label}</span>`;
+      el.style.left = (G.cx - BUB) + 'px';
+      el.style.top = (G.cy - BUB) + 'px';
+      const rec = { el, dx: G.Rsub * Math.cos(rad(a)), dy: -G.Rsub * Math.sin(rad(a)) };
+      place(rec, .55, .35);
+      el.addEventListener('click', (e) => {
+        if (S.mode === 'tap' && S.zone === zone) commit(zone, i, e.detail === 0 ? 'tastiera' : 'tocchi');
+      });
+      subsLayer.appendChild(el);
+      return rec;
+    });
+    S.subEls.forEach((rec, i) => {
+      rec.el.getBoundingClientRect();
+      rec.el.style.transitionDelay = (i * 40) + 'ms';
+      rec.el.style.opacity = '1';
+      place(rec, 1, 1);
+      setTimeout(() => { rec.el.style.transitionDelay = '0ms'; }, 420);
+    });
+    buzz(5);
+  }
+
+  function closeSub() {
+    const leaving = S.subEls;
+    leaving.forEach((rec) => {
+      rec.el.style.transitionDelay = '0ms';
+      rec.el.style.opacity = '0';
+      place(rec, .6, .4);
+    });
+    setTimeout(() => leaving.forEach((rec) => rec.el.remove()), 240);
+    S.subEls = [];
+    S.sub = false;
+    S.item = null;
+  }
+
+  function setItem(i) {
+    const prev = S.item != null && S.subEls[S.item];
+    if (prev) { prev.el.classList.remove('hot'); place(prev, 1, 1); }
+    S.item = i;
+    const next = i != null && S.subEls[i];
+    if (next) {
+      next.el.style.transitionDelay = '0ms';
+      next.el.classList.add('hot');
+      place(next, 1, 1.16);
+      buzz(6);
+    }
+  }
+
+  /* ---------- gesto a trascinamento ---------- */
+  function startDrag(e) {
+    measure();
+    Object.assign(S, {
+      mode: 'drag', pid: e.pointerId, t0: performance.now(),
+      downX: e.clientX, downY: e.clientY,
+      moved: false, everZone: false, zone: null, item: null, last: null
+    });
+    orb.setPointerCapture(e.pointerId);
+    stage.classList.add('open', 'drag');
+    drawTrail(e.clientX, e.clientY);
+    buzz(6);
+    updatePill();
+  }
+
+  function onMove(e) {
+    if (S.mode !== 'drag' || e.pointerId !== S.pid) return;
+    const x = e.clientX, y = e.clientY;
+    if (!S.moved && Math.hypot(x - S.downX, y - S.downY) > MOVE_MIN) S.moved = true;
+    const dx = x - G.cx, dy = G.cy - y, dist = Math.hypot(dx, dy);
+    S.last = { dx, dy, dist };
+    drawTrail(x, y);
+
+    const zone = !S.moved || dist < DEAD ? null : (dx < 0 ? 'out' : 'in');
+    if (zone !== S.zone) setZone(zone);
+    if (S.zone && !S.sub && dist > G.Rv) openSub(S.zone);
+
+    const item = S.sub && dist > G.ring ? nearestItem(S.zone, angleDeg(dx, dy)) : null;
+    if (item !== S.item) setItem(item);
+
+    updatePill();
+    updateReadout();
+  }
+
+  function onUp(e) {
+    if (S.mode !== 'drag' || e.pointerId !== S.pid) return;
+    const dur = performance.now() - S.t0;
+    if (!S.moved && dur < TAP_MAX) { enterTap(); return; }
+    if (S.zone) commit(S.zone, S.item ?? 0, 'gesto', dur);
+    else cancel('Annullato', 'gesto', dur);
+  }
+
+  function onCancel(e) {
+    if (S.mode !== 'drag' || e.pointerId !== S.pid) return;
+    cancel('Interrotto dal sistema', 'gesto', performance.now() - S.t0);
+  }
+
+  /* ---------- modalità a tocchi (ripiego e tastiera) ---------- */
+  function enterTap() {
+    S.mode = 'tap';
+    S.t0 = performance.now();
+    stage.classList.remove('drag');
+    stage.classList.add('open', 'tap');
+    updatePill();
+  }
+
+  function tapAt(e) {
+    const x = e.clientX, y = e.clientY;
+    const dx = x - G.cx, dy = G.cy - y, dist = Math.hypot(dx, dy);
+    if (S.sub) {
+      const angles = MENU[S.zone].angles;
+      for (let i = 0; i < angles.length; i++) {
+        const p = polar(angles[i], G.Rsub);
+        if (Math.hypot(x - p.x, y - p.y) < BUB + 12) {
+          e.preventDefault();
+          setItem(i);
+          commit(S.zone, i, 'tocchi');
+          return;
+        }
+      }
+    }
+    if (dist >= DEAD && dist <= G.Rv) {
+      const z = dx < 0 ? 'out' : 'in';
+      if (z !== S.zone) setZone(z);
+      updatePill();
+      return;
+    }
+    cancel('Chiuso', 'tocchi');
+  }
+
+  /* ---------- esito ---------- */
+  function close() {
+    clearTimeout(S.dwell);
+    if (S.sub) closeSub();
+    S.mode = 'idle';
+    S.zone = null;
+    S.item = null;
+    S.pid = null;
+    paintZone();
+    stage.classList.remove('open', 'drag', 'tap');
+    pill.className = 'pill';
+  }
+
+  function commit(zone, i, mode, dur) {
+    if (S.mode === 'idle') return;
+    const d = dur ?? performance.now() - S.t0;
+    const m = MENU[zone], it = m.items[i];
+    buzz([10, 40, 14]);
+    close();
+    addLog({ zone, text: it.label, mode, dur: d });
+    toast(`Nuova ${m.name.toLowerCase()} · ${it.label}`, 'ok');
+  }
+
+  function cancel(reason, mode, dur) {
+    if (S.mode === 'idle') return;
+    const d = dur ?? performance.now() - S.t0;
+    close();
+    addLog({ zone: null, text: reason, mode, dur: d });
+    toast(reason, 'muted');
+  }
+
+  function addLog(en) {
+    emptyEl.hidden = true;
+    const li = document.createElement('li');
+    li.className = 'entry ' + (en.zone || 'cancel');
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.textContent = en.zone ? MENU[en.zone].name : 'Nessuno';
+    const what = document.createElement('span');
+    what.className = 'what';
+    what.textContent = en.text;
+    const meta = document.createElement('span');
+    meta.className = 'meta';
+    meta.textContent = `${en.mode} · ${Math.round(en.dur)} ms`;
+    li.append(chip, what, meta);
+    logEl.prepend(li);
+    while (logEl.children.length > 8) logEl.lastElementChild.remove();
+  }
+
+  /* ---------- eventi ---------- */
+  stage.addEventListener('pointerdown', (e) => {
+    if (S.mode === 'idle') {
+      if (!e.target.closest('#orb')) return;
+      if (e.button !== undefined && e.button > 0) return;
+      startDrag(e);
+    } else if (S.mode === 'tap') {
+      tapAt(e);
+    }
+  });
+  orb.addEventListener('pointermove', onMove);
+  orb.addEventListener('pointerup', onUp);
+  orb.addEventListener('pointercancel', onCancel);
+  stage.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  orb.addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ' ') && S.mode === 'idle') {
+      e.preventDefault();
+      measure();
+      S.everZone = false;
+      enterTap();
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (S.mode !== 'tap') return;
+    if (e.key === 'Escape') { cancel('Chiuso', 'tastiera'); orb.focus(); return; }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      const z = e.key === 'ArrowLeft' ? 'out' : 'in';
+      if (z !== S.zone) setZone(z);
+      updatePill();
+      setTimeout(() => S.subEls[0] && S.subEls[0].el.focus({ preventScroll: true }), 40);
+    }
+  });
+
+  $('clear').addEventListener('click', () => {
+    logEl.innerHTML = '';
+    emptyEl.hidden = false;
+  });
+
+  /* ---------- regolazioni (ricordate solo in questo browser) ---------- */
+  function store(k, v) { try { localStorage.setItem(k, v); } catch (_) {} }
+  function recall(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
+
+  const savedDelay = recall('cr-delay');
+  if (savedDelay !== null) delayIn.value = savedDelay;
+  guidesIn.checked = recall('cr-guides') === '1';
+  document.body.classList.toggle('guides', guidesIn.checked);
+  delayOut.textContent = delayIn.value + ' ms';
+
+  delayIn.addEventListener('input', () => {
+    delayOut.textContent = delayIn.value + ' ms';
+    store('cr-delay', delayIn.value);
+  });
+  guidesIn.addEventListener('change', () => {
+    document.body.classList.toggle('guides', guidesIn.checked);
+    store('cr-guides', guidesIn.checked ? '1' : '0');
+  });
+
+  addEventListener('resize', () => { if (S.mode === 'idle') measure(); });
+  measure();
+})();
+</script>
+
+</body></html>
