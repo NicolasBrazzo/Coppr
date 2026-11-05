@@ -1,6 +1,6 @@
 # SPEC - Autenticazione senza librerie
 
-Stato: bozza da approvare · Area dello scope: Account · Milestone 2
+Stato: approvata (Nov 5, 2026) · passi 1 e 2 completati · Area dello scope: Account · Milestone 2
 
 ## Perché
 
@@ -22,6 +22,7 @@ Restano fuori, perché lo scope li mette in v2 o nel resto della v1:
 - Verifica dell'email, reset della password, login con Google (v2).
 - Cambio password dal profilo.
 - Controllo delle password compromesse (Have I Been Pwned).
+- Schermata per impostare o cambiare il nome: il nome resta vuoto alla registrazione.
 - Account demo: qui si prepara solo il campo `is_demo` e la possibilità di avere utenti senza password. L'endpoint arriva con i dati finti.
 - Rate limiting su Redis (laboratorio post-v1): qui il limitatore è in memoria.
 
@@ -89,11 +90,12 @@ Lo schema torna a quello dello scope, più `is_demo`:
 
 | Tabella | Campi |
 | --- | --- |
-| `users` | `id`, `email` (unica, minuscola), `password_hash` (nullable), `is_demo`, `created_at` |
+| `users` | `id`, `name` (nullable, da 1 a 50 caratteri), `email` (unica, minuscola), `password_hash` (nullable), `is_demo`, `created_at` |
 | `sessions` | `id` (hash del token), `user_id`, `expires_at`, `created_at` |
 
 - Vincolo su `users`: `is_demo OR password_hash IS NOT NULL`. Solo l'utente demo può esistere senza password.
-- Si eliminano `accounts` e `verifications` e le colonne `name`, `email_verified`, `image`, `updated_at` di `users`, le colonne `token`, `ip_address`, `user_agent`, `updated_at` di `sessions`. L'interfaccia mostra l'email al posto del nome (decisione da confermare, vedi sotto).
+- Il nome è facoltativo: la registrazione non lo chiede, si imposta in seguito. L'interfaccia mostra `name`, e se manca l'email.
+- Si eliminano `accounts` e `verifications` e le colonne `email_verified`, `image`, `updated_at` di `users`, le colonne `token`, `ip_address`, `user_agent`, `updated_at` di `sessions`. `sessions.id` passa da `uuid` a `text`.
 - Migrazione Drizzle Kit versionata (regola 7). I dati di sviluppo esistenti vengono scartati: gli hash di Better Auth non sono compatibili e non c'è nessun utente reale.
 - `ON DELETE CASCADE` da `sessions` verso `users` resta: l'eliminazione dell'account cancella anche le sessioni.
 
@@ -103,8 +105,8 @@ Tutte le risposte di errore hanno la forma `{ "error": "messaggio" }`. L'input �
 
 | Metodo e percorso | Auth | Corpo | Risposta |
 | --- | --- | --- | --- |
-| `POST /api/auth/register` | no | `{ email, password }` | 201 `{ id, email }` + cookie. 409 email già usata, 400 input non valido |
-| `POST /api/auth/login` | no | `{ email, password }` | 200 `{ id, email }` + cookie. 401 credenziali errate (messaggio unico) |
+| `POST /api/auth/register` | no | `{ email, password }` | 201 `{ id, email, name }` + cookie. 409 email già usata, 400 input non valido |
+| `POST /api/auth/login` | no | `{ email, password }` | 200 `{ id, email, name }` + cookie. 401 credenziali errate (messaggio unico) |
 | `POST /api/auth/logout` | sì | - | 204, riga cancellata, cookie azzerato |
 | `GET /api/me` | sì | - | 200 `{ id, email }` (invariato nella forma) |
 | `DELETE /api/account` | sì | `{ password }` | 204, utente cancellato in cascata, cookie azzerato. 401 password errata |
@@ -127,7 +129,7 @@ auth/
   routes.ts         register, login, logout, me, DELETE account
 ```
 
-Da rimuovere: `server/src/auth.ts`, le dipendenze `better-auth` (server e client), `BETTER_AUTH_SECRET` e `BETTER_AUTH_URL` da `.env.example`. `FRONTEND_URL` resta e passa a un piccolo modulo di configurazione. `app.ts` perde `toNodeHandler` e il vincolo di ordine rispetto a `express.json()`. `email.ts` non serve più finché non arriva il reset password (v2): si elimina o si lascia inutilizzato, da decidere.
+Da rimuovere: `server/src/auth.ts`, le dipendenze `better-auth` (server e client), `BETTER_AUTH_SECRET` e `BETTER_AUTH_URL` da `.env.example`. `FRONTEND_URL` resta e passa a un piccolo modulo di configurazione. `app.ts` perde `toNodeHandler` e il vincolo di ordine rispetto a `express.json()`. `email.ts` non serve più finché non arriva il reset password (v2): si elimina e si ricrea in v2.
 
 `express.d.ts` si aggiorna con i tipi `User` e `Session` derivati dallo schema Drizzle.
 
@@ -136,7 +138,7 @@ Da rimuovere: `server/src/auth.ts`, le dipendenze `better-auth` (server e client
 - `lib/auth-client.ts` viene sostituito da un `AuthProvider` con contesto React e un hook `useSession()` che espone `{ user, isPending }`. Chiama `GET /api/me` all'avvio tramite `apiFetch`.
 - `login(email, password)`, `register(email, password)`, `logout()` sono funzioni che usano `apiFetch` e aggiornano il contesto. Nessun dato di sessione in `localStorage`: la sessione vive solo nel cookie.
 - `AuthGate`, `LoginForm`, `RegisterForm`, `SignOutButton` restano con la stessa interfaccia verso `App.tsx`. Cambia la sorgente dei dati.
-- `RegisterForm` perde il campo nome (se si conferma la decisione sul nome) e `AppHeader` mostra l'email.
+- `RegisterForm` perde il campo nome (si imposta in seguito) e `AppHeader` mostra `name ?? email`.
 - Gli schemi Zod di `features/auth/schemas.ts` restano e vengono duplicati lato server in `schemas.ts`. È la duplicazione che un pacchetto condiviso eliminerebbe: se ne riparla alla milestone Transazioni.
 - Una risposta 401 su `/api/me` non è un errore da mostrare: significa "non autenticato" e porta al login.
 - Nuovo: eliminazione dell'account, con dialog di conferma che richiede la password (componente `Dialog` già presente).
@@ -159,7 +161,7 @@ Ogni passo si chiude con test verdi e un commit. Ordine pensato per non lasciare
    - nessuna risposta o log contiene password, hash, token o cookie.
 5. **Client**: `AuthProvider` e `useSession`, funzioni login, register e logout, aggiornamento di `AuthGate`, form e header. Verifica a mano nel browser del flusso completo.
 6. **Eliminazione dell'account**: `DELETE /api/account` con conferma password, test di integrazione (utente e sessioni spariti), dialog nel client.
-7. **Pulizia**: rimozione di `better-auth` da entrambi i `package.json`, di `server/src/auth.ts`, delle variabili d'ambiente inutili, di `email.ts` se confermato. Aggiornamento di `CLAUDE.md` (sezione Autenticazione, regola sul gestore montato prima di `express.json()`) e dello scope (Better Auth non più usato, monorepo, note sulle decisioni qui sotto).
+7. **Pulizia**: rimozione di `better-auth` da entrambi i `package.json`, di `server/src/auth.ts`, delle variabili d'ambiente inutili, di `email.ts`. Aggiornamento di `CLAUDE.md` (sezione Autenticazione, regola sul gestore montato prima di `express.json()`) e dello scope (Better Auth non più usato, monorepo, note sulle decisioni qui sotto).
 8. **Chiusura**: build e lint di client e server, `NEXT.md` con il passo successivo (categorie predefinite e transazioni).
 
 ## Criteri di accettazione
@@ -173,9 +175,9 @@ Ogni passo si chiude con test verdi e un commit. Ordine pensato per non lasciare
 - [ ] Nessun dato di sessione in `localStorage`; ogni chiamata passa da `apiFetch`.
 - [ ] `CLAUDE.md` e lo scope descrivono lo stato reale.
 
-## Decisioni da confermare
+## Decisioni prese
 
-1. **Rimuovere `name` dagli utenti.** Lo scope prevede solo `email`. Il costo è che l'header mostra l'email invece del nome. Se vuoi tenere il nome, resta una colonna `name` e un campo nel form, senza altre conseguenze.
-2. **Eliminare `email.ts`.** Senza verifica e reset nella v1 non viene mai chiamato. Si ricrea in v2.
-3. **scrypt invece di Argon2id.** The Copenhagen Book raccomanda Argon2id, ma `crypto.argon2` non esiste in Node 22 (la versione in uso nel progetto) e per usarlo servirebbe un pacchetto esterno. scrypt è in `node:crypto` da sempre ed è nella lista OWASP. Se si passa a una versione di Node che include Argon2, si cambia solo `password.ts`: il formato PHC con i parametri nella stringa lo permette.
+1. **Il nome resta, facoltativo.** Colonna `name` nullable, non richiesta alla registrazione e impostata in seguito. Finché manca, l'interfaccia mostra l'email.
+2. **`email.ts` si elimina** al passo 7. Senza verifica e reset nella v1 non viene mai chiamato. Si ricrea in v2.
+3. **scrypt invece di Argon2id**, confermato. The Copenhagen Book raccomanda Argon2id, ma `crypto.argon2` non esiste in Node 22 (la versione in uso nel progetto) e per usarlo servirebbe un pacchetto esterno. scrypt è in `node:crypto` da sempre ed è nella lista OWASP. Se si passa a una versione di Node che include Argon2, si cambia solo `password.ts`: il formato PHC con i parametri nella stringa lo permette.
 4. **Limitatore in memoria.** Basta per una sola istanza su Railway e viene sostituito da Redis nel laboratorio post-v1.

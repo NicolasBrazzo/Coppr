@@ -20,87 +20,42 @@ export const kind = pgEnum("kind", ["expense", "income"]);
 const id = () => uuid("id").primaryKey().default(sql`uuidv7()`);
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
-// --- Autenticazione: tabelle lette e scritte da Better Auth (server/src/auth.ts).
-// Generate con `npx auth generate` e adattate alle convenzioni di questo file.
-// I nomi delle proprietà devono restare quelli di Better Auth: l'adattatore Drizzle li usa per mappare i campi.
-
-const updatedAt = () =>
-  timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date());
+// --- Autenticazione (docs/auth/SPEC.md): tabelle nostre, nessuna libreria di autenticazione
 
 export const users = pgTable(
   "users",
   {
     id: id(),
-    name: text("name").notNull(),
-    // Better Auth la salva già in minuscolo; il check lo garantisce anche per le scritture dirette
+    // Facoltativo: si imposta dopo la registrazione. Finché manca, l'interfaccia mostra l'email
+    name: text("name"),
+    // Il check lo garantisce anche per le scritture dirette: l'email si salva sempre in minuscolo
     email: text("email").notNull().unique(),
-    emailVerified: boolean("email_verified").notNull().default(false),
-    image: text("image"),
-    // Campo aggiuntivo di Better Auth con input: false: lo imposta solo il server
+    // Formato scrypt$N$r$p$sale$hash (server/src/auth/password.ts). Null solo per l'utente demo
+    passwordHash: text("password_hash"),
+    // Impostato solo dal server, mai dal client
     isDemo: boolean("is_demo").notNull().default(false),
     createdAt: createdAt(),
-    updatedAt: updatedAt(),
   },
-  (t) => [check("users_email_lowercase", sql`${t.email} = lower(${t.email})`)],
+  (t) => [
+    check("users_email_lowercase", sql`${t.email} = lower(${t.email})`),
+    check("users_password_required", sql`${t.isDemo} OR ${t.passwordHash} IS NOT NULL`),
+    check("users_name_length", sql`${t.name} IS NULL OR char_length(${t.name}) BETWEEN 1 AND 50`),
+  ],
 );
 
 export const sessions = pgTable(
   "sessions",
   {
-    id: id(),
-    // Il valore che sta nel cookie (firmato con BETTER_AUTH_SECRET)
-    token: text("token").notNull().unique(),
+    // SHA-256 esadecimale del token che sta nel cookie (server/src/auth/session.ts), mai il token
+    id: text("id").primaryKey(),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    ipAddress: text("ip_address"),
-    userAgent: text("user_agent"),
     createdAt: createdAt(),
-    updatedAt: updatedAt(),
   },
+  // Per chiudere in un colpo tutte le sessioni di un utente
   (t) => [index("sessions_user_id_idx").on(t.userId)],
-);
-
-// Un account per metodo di accesso. Per email e password: provider_id = 'credential',
-// account_id = id dell'utente, password = hash della password (mai la password in chiaro)
-export const accounts = pgTable(
-  "accounts",
-  {
-    id: id(),
-    accountId: text("account_id").notNull(),
-    providerId: text("provider_id").notNull(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    accessToken: text("access_token"),
-    refreshToken: text("refresh_token"),
-    idToken: text("id_token"),
-    accessTokenExpiresAt: timestamp("access_token_expires_at", { withTimezone: true }),
-    refreshTokenExpiresAt: timestamp("refresh_token_expires_at", { withTimezone: true }),
-    scope: text("scope"),
-    password: text("password"),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [index("accounts_user_id_idx").on(t.userId)],
-);
-
-// Token temporanei: verifica email e recupero password
-export const verifications = pgTable(
-  "verifications",
-  {
-    id: id(),
-    identifier: text("identifier").notNull(),
-    value: text("value").notNull(),
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (t) => [index("verifications_identifier_idx").on(t.identifier)],
 );
 
 // --- Dati dell'app
