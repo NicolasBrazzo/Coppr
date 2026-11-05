@@ -1,6 +1,6 @@
 # SPEC - Autenticazione senza librerie
 
-Stato: approvata (Nov 5, 2026) · passi 1 e 2 completati · Area dello scope: Account · Milestone 2
+Stato: approvata (Nov 5, 2026) · passi 1-3 completati · Area dello scope: Account · Milestone 2
 
 ## Perché
 
@@ -120,7 +120,8 @@ Organizzata per funzionalità, in `server/src/auth/`:
 ```
 auth/
   password.ts       hashPassword, verifyPassword (scrypt)
-  session.ts        createSession, validateSession, deleteSession, token e hash
+  session.ts        token, hash e scadenza (puro, testabile senza database)
+  session-store.ts  createSession, validateSession, deleteSession (database)
   cookie.ts         set e clear del cookie, nome e attributi
   schemas.ts        schemi Zod di registrazione e login
   rate-limit.ts     limitatore in memoria
@@ -129,7 +130,7 @@ auth/
   routes.ts         register, login, logout, me, DELETE account
 ```
 
-Da rimuovere: `server/src/auth.ts`, le dipendenze `better-auth` (server e client), `BETTER_AUTH_SECRET` e `BETTER_AUTH_URL` da `.env.example`. `FRONTEND_URL` resta e passa a un piccolo modulo di configurazione. `app.ts` perde `toNodeHandler` e il vincolo di ordine rispetto a `express.json()`. `email.ts` non serve più finché non arriva il reset password (v2): si elimina e si ricrea in v2.
+Da rimuovere: `server/src/auth.ts`, le dipendenze `better-auth` (server e client), `BETTER_AUTH_SECRET` e `BETTER_AUTH_URL` da `.env.example`. `FRONTEND_URL` resta e passa a `server/src/config.ts`. `app.ts` perde `toNodeHandler` e il vincolo di ordine rispetto a `express.json()`. `email.ts` non serve più finché non arriva il reset password (v2): si elimina e si ricrea in v2.
 
 `express.d.ts` si aggiorna con i tipi `User` e `Session` derivati dallo schema Drizzle.
 

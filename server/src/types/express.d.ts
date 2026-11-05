@@ -1,11 +1,11 @@
-import type { AuthSession } from "../auth.js";
+import type { AuthSession, AuthUser } from "../auth/session-store.js";
 
 declare global {
   namespace Express {
     interface Request {
       // Valorizzati da requireAuth
-      user?: AuthSession["user"];
-      session?: AuthSession["session"];
+      user?: AuthUser;
+      session?: AuthSession;
     }
   }
 }

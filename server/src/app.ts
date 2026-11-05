@@ -1,15 +1,32 @@
-import { toNodeHandler } from "better-auth/node";
 import cookieParser from "cookie-parser";
 import cors from "cors";
-import express from "express";
+import express, { type ErrorRequestHandler } from "express";
 import helmet from "helmet";
-import { auth, frontendUrl } from "./auth.js";
-import { meRouter } from "./auth/routes.js";
+import { requireJsonBody, requireSameOrigin } from "./auth/csrf.js";
+import { authRouter } from "./auth/routes.js";
+import { frontendUrl, isProd } from "./config.js";
 import { healthRouter } from "./health/routes.js";
+
+// Mai il corpo della richiesta nei log: può contenere password
+const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
+  if (err?.type === "entity.parse.failed") {
+    res.status(400).json({ error: "JSON non valido" });
+    return;
+  }
+  if (err?.type === "entity.too.large") {
+    res.status(413).json({ error: "Richiesta troppo grande" });
+    return;
+  }
+  console.error("[errore]", err instanceof Error ? err.message : "sconosciuto");
+  res.status(500).json({ error: "Errore interno" });
+};
 
 // Separata da index.ts così i test possono usarla senza aprire una porta
 export function createApp() {
   const app = express();
+
+  // Railway sta davanti con un solo proxy: req.ip deve essere il client, non il proxy
+  if (isProd) app.set("trust proxy", 1);
 
   app.use(helmet());
   app.use(
@@ -19,16 +36,15 @@ export function createApp() {
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     }),
   );
-
-  // Better Auth legge il corpo da solo: va montato PRIMA di express.json().
-  // Express 5: il wildcard ha un nome (*splat)
-  app.all("/api/auth/*splat", toNodeHandler(auth));
-
-  app.use(express.json());
+  app.use(requireSameOrigin);
+  app.use(requireJsonBody);
+  app.use(express.json({ limit: "10kb" }));
   app.use(cookieParser());
 
   app.use(healthRouter);
-  app.use(meRouter);
+  app.use(authRouter);
+
+  app.use(errorHandler);
 
   return app;
 }
