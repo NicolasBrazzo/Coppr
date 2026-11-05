@@ -8,6 +8,20 @@
       "when": 1793736437664,
       "tag": "0000_damp_lord_tyger",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793816610364,
+      "tag": "0001_better_auth_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793816623120,
+      "tag": "0002_drop_users_password_hash",
+      "breakpoints": true
     }
   ]
 }

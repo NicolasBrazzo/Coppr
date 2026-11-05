@@ -20,35 +20,90 @@ export const kind = pgEnum("kind", ["expense", "income"]);
 const id = () => uuid("id").primaryKey().default(sql`uuidv7()`);
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
+// --- Autenticazione: tabelle lette e scritte da Better Auth (server/src/auth.ts).
+// Generate con `npx auth generate` e adattate alle convenzioni di questo file.
+// I nomi delle proprietà devono restare quelli di Better Auth: l'adattatore Drizzle li usa per mappare i campi.
+
+const updatedAt = () =>
+  timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date());
+
 export const users = pgTable(
   "users",
   {
     id: id(),
+    name: text("name").notNull(),
+    // Better Auth la salva già in minuscolo; il check lo garantisce anche per le scritture dirette
     email: text("email").notNull().unique(),
-    // null solo per gli account demo, che entrano senza password
-    passwordHash: text("password_hash"),
+    emailVerified: boolean("email_verified").notNull().default(false),
+    image: text("image"),
+    // Campo aggiuntivo di Better Auth con input: false: lo imposta solo il server
     isDemo: boolean("is_demo").notNull().default(false),
     createdAt: createdAt(),
+    updatedAt: updatedAt(),
   },
-  (t) => [
-    check("users_email_lowercase", sql`${t.email} = lower(${t.email})`),
-    check("users_password_required", sql`${t.isDemo} OR ${t.passwordHash} IS NOT NULL`),
-  ],
+  (t) => [check("users_email_lowercase", sql`${t.email} = lower(${t.email})`)],
 );
 
 export const sessions = pgTable(
   "sessions",
   {
-    // SHA-256 del token che sta nel cookie: il token in chiaro non tocca mai il database
-    id: text("id").primaryKey(),
+    id: id(),
+    // Il valore che sta nel cookie (firmato con BETTER_AUTH_SECRET)
+    token: text("token").notNull().unique(),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
     createdAt: createdAt(),
+    updatedAt: updatedAt(),
   },
   (t) => [index("sessions_user_id_idx").on(t.userId)],
 );
+
+// Un account per metodo di accesso. Per email e password: provider_id = 'credential',
+// account_id = id dell'utente, password = hash della password (mai la password in chiaro)
+export const accounts = pgTable(
+  "accounts",
+  {
+    id: id(),
+    accountId: text("account_id").notNull(),
+    providerId: text("provider_id").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    idToken: text("id_token"),
+    accessTokenExpiresAt: timestamp("access_token_expires_at", { withTimezone: true }),
+    refreshTokenExpiresAt: timestamp("refresh_token_expires_at", { withTimezone: true }),
+    scope: text("scope"),
+    password: text("password"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("accounts_user_id_idx").on(t.userId)],
+);
+
+// Token temporanei: verifica email e recupero password
+export const verifications = pgTable(
+  "verifications",
+  {
+    id: id(),
+    identifier: text("identifier").notNull(),
+    value: text("value").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("verifications_identifier_idx").on(t.identifier)],
+);
+
+// --- Dati dell'app
 
 export const categories = pgTable(
   "categories",

@@ -17,3 +17,15 @@ L'app è dark-first: `<html class="dark">`. La fonte di verità per colori, font
 - Entrate = `income`, uscite = `expense`, sempre.
 - Gli importi sono interi in centesimi e si mostrano con `tabular-nums`.
 - Ogni coppia testo/sfondo deve avere contrasto almeno 4.5:1.
+
+## Autenticazione
+
+Better Auth (`server/src/auth.ts`): email e password, sessioni di 30 giorni in un cookie httpOnly, tabelle `users`, `sessions`, `accounts`, `verifications` in `server/src/db/schema.ts`.
+
+- Ogni rotta che tocca dati dell'utente usa `requireAuth` (`server/src/auth/require-auth.ts`).
+- Ogni query su transazioni, categorie o conti filtra sempre per `req.user.id`.
+- L'id dell'utente non arriva mai dal client (body, query, parametri), solo dalla sessione.
+- Mai loggare password, token o cookie, nemmeno in sviluppo. I link delle email si loggano solo in sviluppo.
+- Le email passano solo da `server/src/email.ts`.
+- Nel client nessun dato di sessione in `localStorage`: la sessione vive solo nel cookie. Le chiamate all'API usano `apiFetch` (`client/src/lib/api.ts`), che invia sempre `credentials: "include"`.
+- Il gestore di Better Auth va montato prima di `express.json()`.
